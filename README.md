@@ -8,6 +8,101 @@
 
 项目初期将以单体应用完成核心业务建模和基础功能，后续结合课程进度逐步引入数据库持久化、身份认证与权限控制、微服务拆分、消息队列、分布式事务、监控告警以及容器化部署等能力。
 
+## 开发环境与运行说明
+
+当前 Spring Boot 单体工程位于仓库根目录的 `monolith/` 中。
+
+### 环境要求
+
+| 环境 | 版本或说明 |
+| --- | --- |
+| Java | JDK 25 |
+| Spring Boot | 4.0.8 |
+| Maven | 3.9.16，推荐使用项目自带的 Maven Wrapper |
+| 应用端口 | 8080 |
+
+进入工程目录：
+
+```bash
+cd monolith
+```
+
+可使用以下命令确认 Maven Wrapper 和 Java 版本：
+
+```bash
+./mvnw --version
+```
+
+### 编译打包
+
+```bash
+./mvnw clean package -DskipTests
+```
+
+构建成功后，可执行 JAR 位于：
+
+```text
+monolith/target/equipment-rental-0.0.1-SNAPSHOT.jar
+```
+
+### 启动应用
+
+```bash
+./mvnw spring-boot:run
+```
+
+终端出现 `Started EquipmentRentalApplication` 后，表示应用已成功启动。按 `Control + C` 可以停止应用。
+
+### 运行测试
+
+```bash
+./mvnw test
+```
+
+当前启动测试使用 `@SpringBootTest` 的 `contextLoads` 方法，用于验证 Spring 应用上下文能否正常加载。
+
+### 接口验证
+
+应用启动后可以访问：
+
+| 接口 | 方法 | 地址 | 作用 |
+| --- | --- | --- | --- |
+| 问候接口 | GET | <http://localhost:8080/api/hello> | 返回项目名称和应用运行消息 |
+| 健康检查 | GET | <http://localhost:8080/actuator/health> | 返回 Spring Boot 应用健康状态 |
+
+也可以在终端执行：
+
+```bash
+curl -i http://localhost:8080/api/hello
+curl -i http://localhost:8080/actuator/health
+```
+
+问候接口的响应示例：
+
+```json
+{
+  "project": "设备租赁与预约管理平台",
+  "message": "Spring Boot application is running"
+}
+```
+
+健康检查响应中的 `status` 为 `UP`，表示应用处于正常运行状态。
+
+### 当前尚未实现的业务能力
+
+当前版本只完成了 Spring Boot 基础工程、简单 GET 接口和健康检查，尚未实现正式的设备租赁业务，主要包括：
+
+- 设备（Equipment）和预约（Reservation）等业务模型。
+- 设备、库存、预约和租赁订单的完整 REST API。
+- Service、Repository 和数据库持久化。
+- 用户注册、登录、身份认证和角色权限控制。
+- 时间冲突校验、库存锁定、预约取消及超时释放。
+- 设备领取、归还、续租、验收和订单状态流转。
+- 租金、押金、逾期费用和损坏赔偿结算。
+- 故障登记、维修处理和设备重新上架。
+- 到期提醒、异步消息和运营统计。
+- 微服务拆分、分布式事务、监控告警和容器化部署。
+
 ## 业务背景
 
 摄影器材、实验设备和运动器材通常价格较高，但用户往往只需要在特定时间段内短期使用。传统租赁业务依赖电话、即时通信工具或纸质表格登记，容易出现以下问题：
