@@ -76,7 +76,7 @@ monolith/target/equipment-rental-0.0.1-SNAPSHOT.jar
 | 预约列表 | GET | <http://localhost:8080/api/reservations> | 查询全部预约 |
 | 预约详情 | GET | <http://localhost:8080/api/reservations/{id}> | 按 ID 查询预约 |
 
-也可以在终端执行：
+保持应用启动终端运行，在另一个终端可以执行以下命令检查应用状态：
 
 ```bash
 curl -i http://localhost:8080/api/hello
@@ -94,7 +94,11 @@ curl -i http://localhost:8080/actuator/health
 
 健康检查响应中的 `status` 为 `UP`，表示应用处于正常运行状态。
 
-创建设备示例：
+#### 可直接运行的 curl 示例
+
+当前版本使用内存存储。应用重新启动后数据为空，可以按下面顺序直接执行命令，先创建设备，再使用返回的设备 ID 创建预约。
+
+示例 1：创建设备。
 
 ```bash
 curl -i -X POST http://localhost:8080/api/equipment \
@@ -102,12 +106,19 @@ curl -i -X POST http://localhost:8080/api/equipment \
   -d '{"code":"CAM-001","name":"索尼微单相机","category":"摄影设备","dailyRate":120.00,"deposit":1000.00,"description":"适合短期摄影项目"}'
 ```
 
-创建预约示例：
+示例 2：为刚创建的设备创建预约。应用重新启动后，第一台设备的 ID 为 `1`。
 
 ```bash
 curl -i -X POST http://localhost:8080/api/reservations \
   -H 'Content-Type: application/json' \
   -d '{"equipmentId":1,"renterName":"张三","startTime":"2026-10-20T09:00:00","endTime":"2026-10-21T09:00:00"}'
+```
+
+示例 3：查询已经创建的设备和预约。
+
+```bash
+curl -i http://localhost:8080/api/equipment
+curl -i http://localhost:8080/api/reservations
 ```
 
 创建设备或预约成功时返回 HTTP 201。设备不存在返回 404，参数错误返回 400，设备编号重复、设备不可预约或预约时间冲突返回 409。
