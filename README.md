@@ -59,7 +59,7 @@ monolith/target/equipment-rental-0.0.1-SNAPSHOT.jar
 ./mvnw test
 ```
 
-当前启动测试使用 `@SpringBootTest` 的 `contextLoads` 方法，用于验证 Spring 应用上下文能否正常加载。
+当前测试包含 `@SpringBootTest` 的 `contextLoads`，并覆盖预约正常创建、时间重叠拦截、相邻时间段放行和无效时间范围拦截。
 
 ### 接口验证
 
@@ -69,6 +69,12 @@ monolith/target/equipment-rental-0.0.1-SNAPSHOT.jar
 | --- | --- | --- | --- |
 | 问候接口 | GET | <http://localhost:8080/api/hello> | 返回项目名称和应用运行消息 |
 | 健康检查 | GET | <http://localhost:8080/actuator/health> | 返回 Spring Boot 应用健康状态 |
+| 创建设备 | POST | <http://localhost:8080/api/equipment> | 创建一台状态为 `AVAILABLE` 的设备 |
+| 设备列表 | GET | <http://localhost:8080/api/equipment> | 查询全部设备 |
+| 设备详情 | GET | <http://localhost:8080/api/equipment/{id}> | 按 ID 查询设备 |
+| 创建预约 | POST | <http://localhost:8080/api/reservations> | 校验设备和时间段后创建预约 |
+| 预约列表 | GET | <http://localhost:8080/api/reservations> | 查询全部预约 |
+| 预约详情 | GET | <http://localhost:8080/api/reservations/{id}> | 按 ID 查询预约 |
 
 也可以在终端执行：
 
@@ -88,15 +94,32 @@ curl -i http://localhost:8080/actuator/health
 
 健康检查响应中的 `status` 为 `UP`，表示应用处于正常运行状态。
 
+创建设备示例：
+
+```bash
+curl -i -X POST http://localhost:8080/api/equipment \
+  -H 'Content-Type: application/json' \
+  -d '{"code":"CAM-001","name":"索尼微单相机","category":"摄影设备","dailyRate":120.00,"deposit":1000.00,"description":"适合短期摄影项目"}'
+```
+
+创建预约示例：
+
+```bash
+curl -i -X POST http://localhost:8080/api/reservations \
+  -H 'Content-Type: application/json' \
+  -d '{"equipmentId":1,"renterName":"张三","startTime":"2026-10-20T09:00:00","endTime":"2026-10-21T09:00:00"}'
+```
+
+创建设备或预约成功时返回 HTTP 201。设备不存在返回 404，参数错误返回 400，设备编号重复、设备不可预约或预约时间冲突返回 409。
+
 ### 当前尚未实现的业务能力
 
-当前版本只完成了 Spring Boot 基础工程、简单 GET 接口和健康检查，尚未实现正式的设备租赁业务，主要包括：
+当前版本已实现设备和预约模型、内存数据存储、创建与查询接口，以及预约时间冲突校验。以下业务能力尚未实现：
 
-- 设备（Equipment）和预约（Reservation）等业务模型。
-- 设备、库存、预约和租赁订单的完整 REST API。
-- Service、Repository 和数据库持久化。
+- JPA Repository、MySQL 数据库持久化和可重复初始化数据。
+- 设备状态修改、预约取消、库存锁定和租赁订单的完整 REST API。
 - 用户注册、登录、身份认证和角色权限控制。
-- 时间冲突校验、库存锁定、预约取消及超时释放。
+- 预约取消及超时释放。
 - 设备领取、归还、续租、验收和订单状态流转。
 - 租金、押金、逾期费用和损坏赔偿结算。
 - 故障登记、维修处理和设备重新上架。
