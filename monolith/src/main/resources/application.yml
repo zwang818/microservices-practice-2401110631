@@ -1,6 +1,18 @@
 spring:
   application:
     name: equipment-rental
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/equipment_rental?connectionTimeZone=Asia/Shanghai&characterEncoding=UTF-8}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  sql:
+    init:
+      mode: always
+      platform: mysql
 
 server:
   port: 8080

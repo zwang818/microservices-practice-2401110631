@@ -1,13 +1,10 @@
 package com.zjgsu.wz.service;
 
 import java.time.LocalDateTime;
-import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.zjgsu.wz.dto.reservation.CreateReservationRequest;
 import com.zjgsu.wz.exception.BusinessConflictException;
@@ -17,62 +14,55 @@ import com.zjgsu.wz.model.Equipment;
 import com.zjgsu.wz.model.EquipmentStatus;
 import com.zjgsu.wz.model.Reservation;
 import com.zjgsu.wz.model.ReservationStatus;
+import com.zjgsu.wz.repository.EquipmentRepository;
+import com.zjgsu.wz.repository.ReservationRepository;
 
 @Service
+@Transactional(readOnly = true)
 public class ReservationService {
 
-    private final EquipmentService equipmentService;
-    private final Map<Long, Reservation> reservationStore = new ConcurrentHashMap<>();
-    private final AtomicLong idSequence = new AtomicLong(1);
+    private final EquipmentRepository equipmentRepository;
+    private final ReservationRepository reservationRepository;
 
-    public ReservationService(EquipmentService equipmentService) {
-        this.equipmentService = equipmentService;
+    public ReservationService(EquipmentRepository equipmentRepository, ReservationRepository reservationRepository) {
+        this.equipmentRepository = equipmentRepository;
+        this.reservationRepository = reservationRepository;
     }
 
-    public synchronized Reservation create(CreateReservationRequest request) {
-        Equipment equipment = equipmentService.findById(request.equipmentId());
+    @Transactional
+    public Reservation create(CreateReservationRequest request) {
         validateTimeRange(request.startTime(), request.endTime());
+        // 锁定设备直到事务提交，使同一设备的冲突检查和保存顺序执行。
+        Equipment equipment = equipmentRepository.findByIdForUpdate(request.equipmentId())
+                .orElseThrow(() -> new ResourceNotFoundException("设备不存在，ID: " + request.equipmentId()));
 
         if (equipment.getStatus() != EquipmentStatus.AVAILABLE) {
             throw new BusinessConflictException("当前设备不可预约，状态: " + equipment.getStatus());
         }
 
-        boolean overlaps = reservationStore.values().stream()
-                .filter(reservation -> reservation.getEquipment().getId().equals(equipment.getId()))
-                .filter(reservation -> reservation.getStatus() == ReservationStatus.CONFIRMED)
-                .anyMatch(reservation -> isOverlapping(
-                        reservation.getStartTime(),
-                        reservation.getEndTime(),
-                        request.startTime(),
-                        request.endTime()));
+        boolean overlaps = reservationRepository.existsByEquipmentIdAndStatusAndStartTimeLessThanAndEndTimeGreaterThan(
+                equipment.getId(), ReservationStatus.CONFIRMED, request.endTime(), request.startTime());
         if (overlaps) {
             throw new BusinessConflictException("该设备在所选时间段已被预约");
         }
 
         Reservation reservation = new Reservation(
-                idSequence.getAndIncrement(),
                 equipment,
                 request.renterName().trim(),
                 request.startTime(),
                 request.endTime(),
                 ReservationStatus.CONFIRMED,
                 LocalDateTime.now());
-        reservationStore.put(reservation.getId(), reservation);
-        return reservation;
+        return reservationRepository.saveAndFlush(reservation);
     }
 
     public List<Reservation> findAll() {
-        return reservationStore.values().stream()
-                .sorted(Comparator.comparing(Reservation::getId))
-                .toList();
+        return reservationRepository.findAllByOrderByIdAsc();
     }
 
     public Reservation findById(Long id) {
-        Reservation reservation = reservationStore.get(id);
-        if (reservation == null) {
-            throw new ResourceNotFoundException("预约不存在，ID: " + id);
-        }
-        return reservation;
+        return reservationRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("预约不存在，ID: " + id));
     }
 
     private void validateTimeRange(LocalDateTime startTime, LocalDateTime endTime) {
@@ -81,12 +71,4 @@ public class ReservationService {
         }
     }
 
-    private boolean isOverlapping(
-            LocalDateTime existingStart,
-            LocalDateTime existingEnd,
-            LocalDateTime requestedStart,
-            LocalDateTime requestedEnd) {
-        return existingStart.isBefore(requestedEnd)
-                && existingEnd.isAfter(requestedStart);
-    }
 }

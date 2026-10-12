@@ -19,6 +19,7 @@
 | Java | JDK 25 |
 | Spring Boot | 4.0.8 |
 | Maven | 3.9.16，推荐使用项目自带的 Maven Wrapper |
+| 数据库 | MySQL 8.4；自动化测试使用 H2 |
 | 应用端口 | 8080 |
 
 进入工程目录：
@@ -45,9 +46,51 @@ cd monolith
 monolith/target/equipment-rental-0.0.1-SNAPSHOT.jar
 ```
 
-### 启动应用
+### 本地 MySQL 安装、建库与连接
+
+macOS 可以通过 Homebrew 安装并启动 MySQL 8.4：
 
 ```bash
+brew install mysql@8.4
+brew services start mysql@8.4
+export PATH="$(brew --prefix mysql@8.4)/bin:$PATH"
+mysql --version
+```
+
+Windows 可从 [MySQL 官方下载页](https://dev.mysql.com/downloads/mysql/8.4.html) 安装 MySQL Server 8.4，并确认 MySQL 服务运行。以下 mysql 命令需在能找到 mysql 客户端的终端中执行。
+
+在仓库根目录执行建库脚本：
+
+```bash
+mysql -u root < monolith/scripts/create-database.sql
+```
+
+Homebrew 新安装的本地 MySQL 默认 root 密码为空。有密码时使用 `mysql -u root -p`，按提示输入密码。数据库默认名为 `equipment_rental`。应用启动时执行 `schema-mysql.sql` 建立两张业务表，再由 JPA 校验字段映射。表结构、约束和关系见 [数据库设计](docs/database.md)。
+
+`application.yml` 读取以下环境变量，默认连接本机 MySQL：
+
+| 环境变量 | 默认值 |
+| --- | --- |
+| `DB_URL` | `jdbc:mysql://localhost:3306/equipment_rental?connectionTimeZone=Asia/Shanghai&characterEncoding=UTF-8` |
+| `DB_USERNAME` | `root` |
+| `DB_PASSWORD` | 空字符串 |
+
+如本机数据库有密码，在启动应用的同一个终端中输入（bash/zsh）：
+
+```bash
+export DB_USERNAME=root
+read -r -s DB_PASSWORD
+export DB_PASSWORD
+```
+
+执行 read 后输入实际密码并回车，密码不会显示。配置和文档不保存个人密码。本项目使用本地 MySQL，不需要 Docker Compose。
+
+### 启动应用
+
+从仓库根目录进入工程（如果已经在 monolith 中则不再执行 cd）：
+
+```bash
+cd monolith
 ./mvnw spring-boot:run
 ```
 
@@ -59,7 +102,18 @@ monolith/target/equipment-rental-0.0.1-SNAPSHOT.jar
 ./mvnw test
 ```
 
-当前测试包含 `@SpringBootTest` 的 `contextLoads`，并覆盖预约正常创建、时间重叠拦截、相邻时间段放行和无效时间范围拦截。
+测试使用独立 H2 内存数据库，自动建表并准备数据，测试事务自动回滚。覆盖应用启动、Repository 真实读写和唯一约束、预约时间规则，以及 API 创建查询和错误响应；无需启动 MySQL 即可执行。
+
+### 可重复的演示数据准备
+
+应用首次启动建表后，在另一个终端进入 `monolith/` 并执行：
+
+```bash
+mysql -u root equipment_rental < scripts/demo-data.sql
+mysql -u root equipment_rental -e "SELECT id, code, name FROM equipment; SELECT id, equipment_id, renter_name FROM reservation;"
+```
+
+脚本准备 DEMO-CAM-001 设备和对应预约。顺序重复执行不会增加重复样例，应用重启后数据保留。MySQL 有密码时加 `-p`。
 
 ### 接口验证
 
@@ -96,22 +150,24 @@ curl -i http://localhost:8080/actuator/health
 
 #### 可直接运行的 curl 示例
 
-当前版本使用内存存储。应用重新启动后数据为空，可以按下面顺序直接执行命令，先创建设备，再使用返回的设备 ID 创建预约。
+当前版本使用 MySQL 持久化，重启应用会保留数据。以下命令在同一个 bash/zsh 终端按顺序执行；用新编号创建设备，并自动从 JSON 响应中提取实际 ID，不依赖主键从 1 开始。
 
 示例 1：创建设备。
 
 ```bash
-curl -i -X POST http://localhost:8080/api/equipment \
+equipment_response=$(curl -sS -X POST http://localhost:8080/api/equipment \
   -H 'Content-Type: application/json' \
-  -d '{"code":"CAM-001","name":"索尼微单相机","category":"摄影设备","dailyRate":120.00,"deposit":1000.00,"description":"适合短期摄影项目"}'
+  -d "{\"code\":\"CAM-$(date +%Y%m%d%H%M%S)-$RANDOM\",\"name\":\"索尼微单相机\",\"category\":\"摄影设备\",\"dailyRate\":120.00,\"deposit\":1000.00,\"description\":\"适合短期摄影项目\"}")
+printf '%s\n' "$equipment_response"
+equipment_id=$(printf '%s\n' "$equipment_response" | sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p')
 ```
 
-示例 2：为刚创建的设备创建预约。应用重新启动后，第一台设备的 ID 为 `1`。
+示例 2：使用上一步提取的设备 ID 创建预约，成功时返回 HTTP 201 和 CONFIRMED 状态。
 
 ```bash
 curl -i -X POST http://localhost:8080/api/reservations \
   -H 'Content-Type: application/json' \
-  -d '{"equipmentId":1,"renterName":"张三","startTime":"2026-10-20T09:00:00","endTime":"2026-10-21T09:00:00"}'
+  -d "{\"equipmentId\":${equipment_id},\"renterName\":\"张三\",\"startTime\":\"2026-10-20T09:00:00\",\"endTime\":\"2026-10-21T09:00:00\"}"
 ```
 
 示例 3：查询已经创建的设备和预约。
@@ -125,9 +181,8 @@ curl -i http://localhost:8080/api/reservations
 
 ### 当前尚未实现的业务能力
 
-当前版本已实现设备和预约模型、内存数据存储、创建与查询接口，以及预约时间冲突校验。以下业务能力尚未实现：
+当前版本已实现设备和预约的 JPA 模型、Repository、MySQL 持久化、创建与查询接口、预约时间冲突校验和可重复的数据准备方式。以下业务能力尚未实现：
 
-- JPA Repository、MySQL 数据库持久化和可重复初始化数据。
 - 设备状态修改、预约取消、库存锁定和租赁订单的完整 REST API。
 - 用户注册、登录、身份认证和角色权限控制。
 - 预约取消及超时释放。

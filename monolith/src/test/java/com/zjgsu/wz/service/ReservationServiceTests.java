@@ -8,6 +8,9 @@ import java.time.LocalDateTime;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.zjgsu.wz.dto.equipment.CreateEquipmentRequest;
 import com.zjgsu.wz.dto.reservation.CreateReservationRequest;
@@ -17,15 +20,18 @@ import com.zjgsu.wz.model.Equipment;
 import com.zjgsu.wz.model.Reservation;
 import com.zjgsu.wz.model.ReservationStatus;
 
+@SpringBootTest
+@Transactional
 class ReservationServiceTests {
 
     private Equipment equipment;
+    @Autowired
+    private EquipmentService equipmentService;
+    @Autowired
     private ReservationService reservationService;
 
     @BeforeEach
     void setUp() {
-        EquipmentService equipmentService = new EquipmentService();
-        reservationService = new ReservationService(equipmentService);
         equipment = equipmentService.create(new CreateEquipmentRequest(
                 "CAM-001",
                 "索尼微单相机",
@@ -42,7 +48,7 @@ class ReservationServiceTests {
                 LocalDateTime.of(2026, 10, 20, 9, 0),
                 LocalDateTime.of(2026, 10, 21, 9, 0)));
 
-        assertThat(reservation.getId()).isEqualTo(1L);
+        assertThat(reservation.getId()).isPositive();
         assertThat(reservation.getEquipment().getId()).isEqualTo(equipment.getId());
         assertThat(reservation.getStatus()).isEqualTo(ReservationStatus.CONFIRMED);
     }
@@ -75,7 +81,7 @@ class ReservationServiceTests {
                 boundary,
                 LocalDateTime.of(2026, 10, 22, 9, 0)));
 
-        assertThat(adjacent.getId()).isEqualTo(2L);
+        assertThat(adjacent.getId()).isPositive();
     }
 
     @Test

@@ -3,22 +3,47 @@ package com.zjgsu.wz.model;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+
+@Entity
+@Table(name = "equipment", uniqueConstraints = @UniqueConstraint(name = "uk_equipment_code", columnNames = "code"))
 public class Equipment {
 
-    private final Long id;
-    private final String code;
-    private final String name;
-    private final String category;
-    private final BigDecimal dailyRate;
-    private final BigDecimal deposit;
-    private final EquipmentStatus status;
-    private final String description;
-    private final LocalDateTime createdAt;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    @Column(nullable = false, length = 64)
+    private String code;
+    @Column(nullable = false, length = 100)
+    private String name;
+    @Column(nullable = false, length = 50)
+    private String category;
+    @Column(name = "daily_rate", nullable = false, precision = 12, scale = 2)
+    private BigDecimal dailyRate;
+    @Column(nullable = false, precision = 12, scale = 2)
+    private BigDecimal deposit;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20, columnDefinition = "varchar(20)")
+    private EquipmentStatus status;
+    @Column(length = 1000)
+    private String description;
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
 
-    public Equipment(Long id, String code, String name, String category,
+    protected Equipment() {
+    }
+
+    public Equipment(String code, String name, String category,
             BigDecimal dailyRate, BigDecimal deposit, EquipmentStatus status,
             String description, LocalDateTime createdAt) {
-        this.id = id;
         this.code = code;
         this.name = name;
         this.category = category;
